@@ -6,6 +6,7 @@ The license, code of conduct, and security/contributing guidelines in the main r
 <br>This repository is <b>open</b> for contributions! If you'd like to, you may open a PR or an issue, contributing helps us as we develop aurorachat!
 
 <h1 align="center">How to Run the Server</h1>
+
 ### Running AUC v6
 
 ```
