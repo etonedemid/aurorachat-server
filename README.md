@@ -24,6 +24,7 @@ node server.js
 ```
 git clone https://github.com/Unitendo/aurorachat-server.git
 cd aurorachat-server
+git checkout bee4c25
 ```
 
 ### 2. Set up environment variables
