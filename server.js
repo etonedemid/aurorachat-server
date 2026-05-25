@@ -411,7 +411,7 @@ app.post('/admin/userinfo', async (req, res) => {
   const users = readUsers();
   const user = users.users.find(user => user.username === username);
   // <p>Username: ${user.username}<br>Password Hash: ${user.password}<br>ID: ${user.id}<br>Banned: ${user.banned}</p>
-  fs.readFile('admin-web/userinfo/userinfoform.html', 'utf8', (_, data) => {
+  fs.readFile('admin-web/userinfo/userinfo.html', 'utf8', (_, data) => {
     return res.send(
       data.replace("[username]", user.username)
           .replace("[password]", user.password)
