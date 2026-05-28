@@ -7,14 +7,15 @@ class Client {
       console.log('Connected via WebSocket');
     }
     this.ws.onmessage = (event) => {
-      var data = event.data.split("|").slice(0, -1);
+      var data = event.data.split("|").slice(0, -2);
       var result = {}
       result["username"] = data[0];
       result["message"] = data.slice(1,-1).join("|"); // allow for messages with pipes in them
       result["room"] = data.slice(-1,).join("|");
       result["pfp"] = "img/pfp.png"; // placeholder
       result["platform"] = "img/plt/web.png"; // placeholder
-
+      console.log(!!this.onMessage)
+      console.log(result)
       if (this.onMessage) { // check if callback has been created yet
         this.onMessage(result);
       };
@@ -37,7 +38,7 @@ class Client {
         'Content-Type': 'text/plain',
         'User-Agent': this.ua
       },
-      body: [username,password].join("|")
+      body: [username,password,,].join("|")
     })
     const data = await response.text();
     return data;
@@ -49,7 +50,7 @@ class Client {
           'Content-Type': 'text/plain',
           'User-Agent': this.ua
         },
-        body: [username,password].join("|")
+        body: [username,password,,].join("|")
     })
     const data = await response.text();
     console.log(data)
@@ -64,7 +65,7 @@ class Client {
           'User-Agent': this.ua,
           'auth': token
         },
-        body: [msg,room].join('|')
+        body: [msg,room,,].join('|')
     })
     const data = await response.text();
     return data;
