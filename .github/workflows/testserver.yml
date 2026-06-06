@@ -26,7 +26,7 @@ jobs:
       - name: Start app and check for crashes
         run: |
           # 1. Start the Node program in the background and save its Process ID (PID)
-          node index.js &
+          node server.js &
           NODE_PID=$!
           
           # 2. Wait for a few seconds to let it initialize/run
