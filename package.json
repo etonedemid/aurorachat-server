@@ -1,4 +1,23 @@
 {
+  "name": "aurorachat-server",
+  "version": "1.0.0",
+  "description": "AUCv6 server.",
+  "homepage": "https://github.com/Unitendo/aurorachat-server#readme",
+  "bugs": {
+    "url": "https://github.com/Unitendo/aurorachat-server/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Unitendo/aurorachat-server.git"
+  },
+  "license": "POL",
+  "author": "Unitendo team",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "express": "^5.2.1",
