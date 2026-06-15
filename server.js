@@ -420,11 +420,13 @@ app.get('/admin', async (req, res) => {
       </head>
       <body>
         <h2>User Negative Actions</h2>
+        <a style='color: red;' href='/admin/mute'>Mute User</a><br>
         <a style='color: red;' href='/admin/ban'>Ban User</a><br>
         <a style='color: red;' href='/admin/delete'>Delete User</a><br>
         <h2>User Positive Actions</h2>
         <a style='color: green;' href='/admin/createAccount'>Create Account</a><br>
         <a style='color: blue;' href='/admin/userinfo'>Check User Information</a><br>
+        <a style='color: #33351c;' href='/admin/unmute'>Unmute User</a><br>
       </body>
     </html>
   `);
@@ -515,6 +517,100 @@ app.post('/admin/delete', async (req, res) => {
 
   return res.send(`
     <p>User deleted!</p>
+    <a href="/admin">Go back</a>
+    `);
+});
+app.get('/admin/mute', async (req, res) => {
+  if (!req.session.admin) {
+    return res.redirect("/admin/login");
+  }
+  return res.send(`
+    <html>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+
+        <style>
+          h1, p, h2, a {
+            font-family: 'Roboto', Arial, sans-serif;
+          }
+        </style>
+      </head>
+      <body>
+      <h1 style='color: red;'>Mute User</h1>
+      <form method="POST">
+        <input name="username" placeholder="Username to mute" /><br>
+        <button type="submit">Mute user</button>
+    </form>
+    </body
+    </html>
+  `);
+});
+
+app.post('/admin/mute', async (req, res) => {
+  if (!req.session.admin) {
+    return res.redirect("/admin/login");
+  }
+  const { username } = req.body;
+  const users = readUsers();
+  const user = users.users.find(user => user.username === username);
+  
+  // Commit the mute to the database
+  if (user) {
+    user.muted = true;
+    writeUsers(users);
+  }
+
+  return res.send(`
+    <p>User Where... Where am I? Hello...? Anyone...? Is... is anybody out there...? Someone!? Anyone!? Can anyone hear me!? ... It's dark. It's so dark here. Someone, anyone, if you can hear me... Say something... please...</p>
+    <a href="/admin">Go back</a>
+    `);
+});
+app.get('/admin/unmute', async (req, res) => {
+  if (!req.session.admin) {
+    return res.redirect("/admin/login");
+  }
+  return res.send(`
+    <html>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+
+        <style>
+          h1, p, h2, a {
+            font-family: 'Roboto', Arial, sans-serif;
+          }
+        </style>
+      </head>
+      <body>
+      <h1 style='color: green;'>Unmute User</h1>
+      <form method="POST">
+        <input name="username" placeholder="Username to unmute" /><br>
+        <button type="submit">Unmute user</button>
+    </form>
+    </body
+    </html>
+  `);
+});
+
+app.post('/admin/unmute', async (req, res) => {
+  if (!req.session.admin) {
+    return res.redirect("/admin/login");
+  }
+  const { username } = req.body;
+  const users = readUsers();
+  const user = users.users.find(user => user.username === username);
+  
+  if (user) {
+    user.muted = false;
+    writeUsers(users);
+  }
+
+
+  return res.send(`
+    <p>User unmuted!</p>
     <a href="/admin">Go back</a>
     `);
 });
@@ -609,7 +705,7 @@ app.post('/admin/userinfo', async (req, res) => {
   const user = users.users.find(user => user.username === username);
 
   return res.send(`
-    <p>Username: ${user.username}<br>Password Hash: ${user.password}<br>ID: ${user.id}<br>Banned: ${user.banned}</p>
+    <p>Username: ${user.username}<br>Password Hash: ${user.password}<br>ID: ${user.id}<br>Banned: ${user.banned}<br>Muted: ${user.muted}</p>
     <a href="/admin">Go back</a>
     `);
 });
