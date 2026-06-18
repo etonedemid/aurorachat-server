@@ -75,10 +75,21 @@ const socket_server = net.createServer((socket) => {
 
     if(parts[0] === 'history') {
       let limit = parts[1] ? parseInt(parts[1]) : 0
+      const room = parts[2]
       if(limit == NaN) limit = 0
       if(limit < 0) limit = 0
       let message = ''
-      for(const room in chatHistory) {
+      if(room) {
+        const history = chatHistory[room]
+        if(history) 
+          for(const msg of history) {
+            message += `${msg.username}|${msg.message}|${room}|\n`
+          }
+        else {
+          console.log(`${socket.remoteAddress} requested message history for nonexistent room (${room})`)
+          return
+        }
+      } else for(const room in chatHistory) {
         const history = chatHistory[room]
         for(const msg of history) {
           message += `${msg.username}|${msg.message}|${room}|\n`
