@@ -468,9 +468,12 @@ app.get('/admin', async (req, res) => {
         <a style='color: red;' href='/admin/delete'>Delete User</a><br>
         <h2>User Positive Actions</h2>
         <a style='color: green;' href='/admin/createAccount'>Create Account</a><br>
-        <a style='color: blue;' href='/admin/userinfo'>Check User Information</a><br>
         <a style='color: #33351c;' href='/admin/unmute'>Unmute User</a><br>
-        <a style='color: yellow;' href='/admin/unban'>Unban User</a><br>
+        <a style='color: #e79b0d;' href='/admin/unban'>Unban User</a><br>
+        <h2>Miscellaneous</h2>
+        <a style='color: blue;' href='/admin/userinfo'>Check User Information</a><br>
+        <a style='color: blue;' href='/admin/userswithip'>Check Users with IP</a><br>
+        <a style='color: green;' href='/admin/changebanreason'>Change User Ban Reason</a><br>
       </body>
     </html>
   `);
@@ -812,6 +815,98 @@ app.post('/admin/userinfo', async (req, res) => {
 
   return res.send(`
     <p>Username: ${user.username}<br>Password Hash: ${user.password}<br>ID: ${user.id}<br>Banned: ${user.banned}<br>Ban Reason: ${user.banReason || "None"}<br>Muted: ${user.muted}<br>IP: ${user.ip}</p>
+    <a href="/admin">Go back</a>
+    `);
+});
+
+app.get('/admin/userswithip', async (req, res) => {
+  if (!req.session.admin) {
+    return res.redirect("/admin/login");
+  }
+  return res.send(`
+    <html>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+
+        <style>
+          h1, p, h2, a {
+            font-family: 'Roboto', Arial, sans-serif;
+          }
+        </style>
+      </head>
+      <body>
+      <h1 style='color: green;'>Check Users with IP</h1>
+      <form method="POST">
+        <input name="ip" placeholder="IP" required /><br>
+        <button type="submit">Grab Users</button>
+    </form>
+    </body>
+    </html>
+  `);
+});
+
+app.post('/admin/userswithip', async (req, res) => {
+  if (!req.session.admin) {
+    return res.redirect("/admin/login");
+  }
+  const {ip} = req.body;
+  
+  const users = readUsers()["users"];
+  const matches = users.filter(item => item.ip === ip).map(item => item.username);
+  const usernamesHtml = matches.map(username => `<p>${username}</p>`).join("\n");
+
+  return res.send(`
+    ${usernamesHtml}
+    <a href="/admin">Go back</a>
+    `);
+});
+
+app.get('/admin/changebanreason', async (req, res) => {
+  if (!req.session.admin) {
+    return res.redirect("/admin/login");
+  }
+  return res.send(`
+    <html>
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+
+        <style>
+          h1, p, h2, a {
+            font-family: 'Roboto', Arial, sans-serif;
+          }
+        </style>
+      </head>
+      <body>
+      <h1 style='color: green;'>Change User Ban Reason</h1>
+      <form method="POST">
+        <input name="username" placeholder="Username" required /><br>
+        <input name="reason" placeholder="New Ban Reason" required /><br>
+        <button type="submit">Change Ban Reason</button>
+    </form>
+    </body>
+    </html>
+  `);
+});
+
+app.post('/admin/changebanreason', async (req, res) => {
+  if (!req.session.admin) {
+    return res.redirect("/admin/login");
+  }
+  const {username, reason} = req.body;
+  const users = readUsers();
+  const user = users.users.find(user => user.username === username);
+  if (user) {
+    user.banReason = reason || "No reason specified";
+  }
+  writeUsers(users);
+
+  return res.send(`
+    <p>Changed user ban reason!</p>
+    <p>Reason: ${reason || "No reason specified"}</p>
     <a href="/admin">Go back</a>
     `);
 });
