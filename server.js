@@ -823,6 +823,9 @@ app.post('/api/isadmin', async (req, res) => {
   
   const users = readUsers();
   const user = users.users.find(user => user.username === username);
+  if (!user) {
+    return res.status(404).send("Invalid user yo");
+  }
   res.status(200).send(`${user.admin}`)
 });
 
