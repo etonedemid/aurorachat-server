@@ -7,6 +7,7 @@ const jwt = require('jsonwebtoken'); // JSON Web Token, used for authentication 
 const path = require('path'); // Wait, what?
 const fs = require('fs'); // Filesystem actions
 const websocket = require('ws'); // WebSocket server, for the web client
+const crypto = require('crypto'); // to generate the encryption key
 
 const { 
   TOKEN_SECRET, SESSION_SECRET,
@@ -52,6 +53,57 @@ const HISTORY_LIMIT = 100; // Easily changeable if moments pass. Shattered glass
  * @type { Object.<string,{ username: string, message: string }[]> }
  */
 const chatHistory = {};
+
+// generating the servers encryption keys
+const server = crypto.generateKeyPairSync('x25519', {
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+});
+
+// function to decypt
+function decypt(enc_msg, clientKey) {
+  const [ivHex, authTagHex, encryptedHex] = enc_msg.split(':');
+  const sharedSecret = crypto.diffieHellman({
+    privateKey: crypto.createPrivateKey(server.privateKey),
+    publicKey: crypto.createPublicKey(clientKey)
+  });
+  const iv = Buffer.from(ivHex, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-gcm', sharedSecret, iv);
+  decipher.setAuthTag(Buffer.from(authTagHex, 'hex'));
+  let decrypted = decipher.update(encryptedHex, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
+
+// function to encrypt
+function encrypt(text, clientKey) {
+  const sharedSecret = crypto.diffieHellman({
+    privateKey: crypto.createPrivateKey(server.privateKey),
+    publicKey: crypto.createPublicKey(clientKey)
+  });
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', sharedSecret, iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  const authTag = cipher.getAuthTag().toString('hex');
+  return `${iv.toString('hex')}:${authTag}:${encrypted}`;
+}
+
+// where we store the client keys
+const clientKeys = {};
+
+// redefining res.send
+app.use((req, res, next) => {
+  const originalSend = res.send;
+  res.send = function (body) {
+    let modifiedBody = body; 
+    if (typeof body === 'string' || Buffer.isBuffer(body)) {
+    }
+    return originalSend.apply(this, [modifiedBody]);
+  };
+  next();
+})
+app.use(express.text()); // Make sure to accept raw text because JSON parsing in base C is hell
 
 // Initialize an empty history array for every single room
 for(const room of rooms) {
@@ -180,7 +232,7 @@ function verifyToken(req, res, next) {
 
   if (!token) {
     console.log(`[${req.ip}]: Error: Invalid Token.`);
-    return res.send("ERR_INVALID_TOKEN");
+    return res.status(400).send("ERR_INVALID_TOKEN");
   }
 
   try {
@@ -189,7 +241,7 @@ function verifyToken(req, res, next) {
     next();
   } catch (err) {
     console.log(`AHHHH OH HELP OH MY GOODNESS AHHHH ${err}`);
-    return res.send("ERR_WHAT_THE_HECK");
+    return res.status(500).send("ERR_WHAT_THE_HECK");
   }
 }
 
@@ -201,7 +253,7 @@ function checkBan(req, res, next) {
     if (user.banned == true) {
       console.log(`Banned user attempted access: ${user.username}`);
       const reason = user.banReason || "No reason specified";
-      return res.send(`ERR_BANNED|${reason}|`);
+      return res.status(403).send(`ERR_BANNED|${reason}|`);
     } else {
       next();
     }
@@ -209,6 +261,23 @@ function checkBan(req, res, next) {
     next();
   }
 }
+
+/*
+extanging encrytion keys
+content should be the clients public encryption key
+*/
+app.post('/api/key', checkBan, (req, res) => {
+  res.set('Content-Type', 'text/plain');
+  const ip = req.ip;
+  if (!ip in clientKeys) {
+    const key = req.body;
+    clientKeys[ip] = key;
+    res.status(200).send(server.publicKey);
+    console.log("Client conected");
+  } else {
+    res.status(409).send("ALREADY CONNECTED");
+  }
+});
 
 // web version
 app.use('/web', express.static('web'));
@@ -237,12 +306,14 @@ message|room|
 Make CERTAIN it ends with a |, otherwise it'll get messy sometimes.
 */
 app.post('/api/chat', verifyToken, checkBan, async (req, res) => {
-  const splittered = req.body.split("|");
+  const ip = req.ip;
+  const decBody = decrypt(res.body, clientKeys.ip);
+  const splittered = decBody.split("|");
   if (!splittered[1] || !splittered[0]) {
-    return res.status(200).send("ERR_MISSING_FIELD");
+    return res.status(406).send("ERR_MISSING_FIELD");
   }
   if (!rooms.includes(splittered[1])) {
-    return res.status(200).send("ERR_FAKE_ROOM_YOU_MORON");
+    return res.status(404).send("ERR_FAKE_ROOM_YOU_MORON");
   }
   if (splittered[1] == "announcements") {
     console.log("Message in announcements:");
@@ -251,7 +322,7 @@ app.post('/api/chat', verifyToken, checkBan, async (req, res) => {
     if (user) {
       if (user.admin == false) {
         console.log("Not enough rights");
-        return res.send("ERR_NO_RIGHTS");
+        return res.status(403).send("ERR_NO_RIGHTS");
       }
     }
   }
@@ -260,14 +331,14 @@ app.post('/api/chat', verifyToken, checkBan, async (req, res) => {
   if (user2) {
     if (user2.banned) {
       const reason = user2.banReason || "No reason specified";
-      return res.status(200).send(`ERR_BANNED|${reason}|`);
+      return res.status(403).send(`ERR_BANNED|${reason}|`);
     }
     if (user2.muted) {
       console.log(`Muted user ${req.user.username} tried to chat.`);
-      return res.status(200).send("ERR_MUTED");
+      return res.status(403).send("ERR_MUTED");
     }
   } else {
-    return res.status(200).send("ERR_FAKE_USER");
+    return res.status(404).send("ERR_FAKE_USER");
   }
   console.log(`[${req.ip}] ${req.user.username}: ${req.body.split('|')[0]}`);
   console.log(`recieved:`,req.body);
@@ -287,10 +358,10 @@ app.post('/api/chat', verifyToken, checkBan, async (req, res) => {
   }
 
   clients.forEach(client => {
-    client.write(`${req.user.username}|${req.body}|\n`);
+    client.write(encrypt(`${req.user.username}|${req.body}|\n`, clientKeys.ip));
   });
   ws_server.clients.forEach(ws => {
-    ws.send(`${req.user.username}|${req.body}|\n`);
+    ws.send(encrypt(`${req.user.username}|${req.body}|\n`, clientKeys.ip));
   });
   return res.status(200).send("OK");
 });
@@ -305,19 +376,21 @@ username|password|
 
 */
 app.post('/api/signup', checkBan, async (req, res) => {
-  const splitten = req.body.split("|");
+  const ip = req.ip;
+  const decBody = decrypt(res.body, clientKeys.ip);
+  const splitten = decBody.split("|");
   const username = splitten[0];
   const password = splitten[1];
 
   if (!username || !password) {
     console.log("Signup: missing fields");
-    return res.send("ERR_MISSING_INPUT");
+    return res.status(406).send("ERR_MISSING_INPUT");
   }
 
   const users = readUsers();
   if (users.users.find(user => user.username === username)) {
     console.log("Signup: account already in use");
-    return res.send("ERR_USER_USED");
+    return res.status(409).send("ERR_USER_USED");
   }
 
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -338,7 +411,9 @@ username|password|
 
 */
 app.post('/api/login', checkBan, async (req, res) => {
-  const splitten = req.body.split("|");
+  const ip = req.ip;
+  const decBody = decrypt(res.body, clientKeys.ip);
+  const splitten = decBody.split("|");
   const username = splitten[0];
   const password = splitten[1];
 
@@ -346,16 +421,16 @@ app.post('/api/login', checkBan, async (req, res) => {
   const user = users.users.find(user => user.username === username);
   if (!user || !(await bcrypt.compare(password, user.password))) {
     console.log("Wrong password");
-    return res.send("ERR_WRONG_PASS");
+    return res.status(401).send("ERR_WRONG_PASS");
   }
 
   if (user) {
     if (user.banned) {
       const reason = user.banReason || "No reason specified";
-      return res.status(200).send(`ERR_BANNED|${reason}|\n`);
+      return res.status(403).send(`ERR_BANNED|${reason}|\n`);
     }
   } else {
-    return res.status(200).send("ERR_FAKE_USER");
+    return res.status(404).send("ERR_FAKE_USER");
   }
 
   const token = jwt.sign({ id: user.id, username }, TOKEN_SECRET, { expiresIn: '1h' });
@@ -377,7 +452,7 @@ app.get('/api/rules', async (req, res) => {
       if (err) {
           console.error(err);
           if (!res.headersSent) {
-              res.status(404).send('* If you are reading this,&  I messed up somehow./%');
+              res.status(500).send('* If you are reading this,&  I messed up somehow./%');
           }
       }
   });
@@ -388,7 +463,7 @@ app.get('/api/faq', async (req, res) => {
     if (err) {
       console.error(err);
       if (!res.headersSent) {
-        res.status(404).send('* If you are reading this,&  I messed up somehow./%');
+        res.status(500).send('* If you are reading this,&  I messed up somehow./%');
       }
     }
   });
@@ -399,7 +474,7 @@ app.get('/api/changelog', async (req, res) => {
     if (err) {
       console.error(err);
       if (!res.headersSent) {
-        res.status(404).send('* If you are reading this,&  I messed up somehow./%');
+        res.status(500).send('* If you are reading this,&  I messed up somehow./%');
       }
     }
   });
@@ -408,7 +483,7 @@ app.get('/api/changelog', async (req, res) => {
 app.post('/api/online', async (req, res) => {
   room = req.body;
   // get online count for room, currently placeholder
-  res.status(200).send("?")
+  res.status(501).send("?")
 })
 
 app.get('/admin/login', async (req, res) => {
